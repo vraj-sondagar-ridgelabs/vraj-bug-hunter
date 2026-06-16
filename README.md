@@ -26,9 +26,29 @@ Prefer a point-and-click flow:
 streamlit run app.py
 ```
 
-Upload the `.docx`, set the output folder + optional project path, click
-**Extract bugs**, then preview each bug's photo and description and download
-`bugs.json` / the Claude prompt.
+Upload the `.docx`, set the optional project path, click **Extract bugs**, then
+preview each bug. Extraction runs **in memory**, so you get two ways to keep the
+output:
+
+- **Save to a folder** — opens your OS file explorer and writes
+  `images/`, `bugs.json` (+ `claude_prompt.txt`) straight into the folder you
+  pick. Uses the browser **File System Access API**, so it works even on the
+  deployed cloud app. Requires **Chrome or Edge** (Chromium).
+- **Download ZIP** — a single ZIP with everything. Works in every browser.
+
+## Deploy to Streamlit Community Cloud
+
+1. Push this repo to GitHub (already done).
+2. Go to [share.streamlit.io](https://share.streamlit.io) → **New app**.
+3. Pick this repo, branch `main`, main file `app.py`.
+4. Deploy. `requirements.txt` + `runtime.txt` (Python 3.12) pin the environment.
+
+**Cloud note — local paths don't exist on the server.** A deployed app runs on
+Streamlit's Linux server, not your PC, so it cannot write to a `C:\...` path or
+open a native folder dialog. This app handles that by extracting in memory and
+giving you **Save to a folder** (browser File System Access API, writes to a
+folder *you* pick on your own machine) and **Download ZIP**. The `tkinter`
+folder dialog only works when you run the app locally, so it is not used here.
 
 ## CLI
 

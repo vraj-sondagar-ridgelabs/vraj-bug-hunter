@@ -139,6 +139,58 @@ def extract_bugs(docx_path: Path, out_dir: Path, project_path: str = "") -> list
     return bugs
 
 
+def extract_bugs_in_memory(
+    docx_path: Path, project_path: str = "", make_prompt: bool = True
+):
+    """Extract bugs without persisting to a chosen folder (cloud-safe).
+
+    Returns ``(bugs, files)`` where:
+      * ``bugs`` is the list of bug dicts, with **relative** ``photo_path`` only
+        (no machine-specific absolute path — portable across local/cloud).
+      * ``files`` maps relative output paths to raw bytes, ready to be zipped or
+        written to a browser-picked folder:
+        ``{"images/bug_1.png": b"...", "bugs.json": b"...",
+           "claude_prompt.txt": b"..."}``.
+
+    Internally it extracts to a temp dir (python-docx needs real paths), then
+    reads the images back into memory and discards the temp dir.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        bugs = extract_bugs(docx_path, tmp_dir, project_path=project_path)
+
+        files: dict[str, bytes] = {}
+        for bug in bugs:
+            rel = bug["photo_path"]  # e.g. "images/bug_1.png"
+            files[rel] = (tmp_dir / rel).read_bytes()
+            # Drop the absolute path; it would point at the (now-deleted) temp dir.
+            bug.pop("photo_abs_path", None)
+
+        files["bugs.json"] = json.dumps(
+            bugs, indent=2, ensure_ascii=False
+        ).encode("utf-8")
+
+        if make_prompt:
+            prompt = build_claude_prompt_relative(bugs)
+            files["claude_prompt.txt"] = prompt.encode("utf-8")
+
+    return bugs, files
+
+
+def build_claude_prompt_relative(bugs: list[dict]) -> str:
+    """Claude brief using relative photo paths (for the in-memory/cloud flow)."""
+    # Reuse build_claude_prompt by temporarily mapping photo_path -> abs field it
+    # expects. We pass relative paths so the prompt resolves after unzip.
+    shimmed = []
+    for bug in bugs:
+        b = dict(bug)
+        b.setdefault("photo_abs_path", bug.get("photo_path", ""))
+        shimmed.append(b)
+    return build_claude_prompt(shimmed, Path("bugs.json"))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Extract bug photos + descriptions from a .docx into JSON."
