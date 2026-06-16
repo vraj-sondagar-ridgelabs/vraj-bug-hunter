@@ -140,7 +140,10 @@ def extract_bugs(docx_path: Path, out_dir: Path, project_path: str = "") -> list
 
 
 def extract_bugs_in_memory(
-    docx_path: Path, project_path: str = "", make_prompt: bool = True
+    docx_path: Path,
+    project_path: str = "",
+    make_prompt: bool = True,
+    folder_name: str = "out",
 ):
     """Extract bugs without persisting to a chosen folder (cloud-safe).
 
@@ -173,25 +176,25 @@ def extract_bugs_in_memory(
         ).encode("utf-8")
 
         if make_prompt:
-            prompt = build_claude_prompt_relative(bugs)
+            prompt = build_claude_prompt_relative(bugs, folder_name=folder_name)
             files["claude_prompt.txt"] = prompt.encode("utf-8")
 
     return bugs, files
 
 
-# Where the user saves the output. The literal "{folder}" is a placeholder the
-# folder-save component replaces with the actual folder name picked at save time.
-SAVE_BASE = r"C:\Users\Offic\Downloads\{folder}"
+# Base directory the user saves output into. The folder name is appended.
+SAVE_ROOT = r"C:\Users\Offic\Downloads"
 
 
-def build_claude_prompt_relative(bugs: list[dict]) -> str:
+def build_claude_prompt_relative(bugs: list[dict], folder_name: str = "out") -> str:
     """Claude brief for the in-memory/cloud flow.
 
-    Photo + JSON paths are written under ``C:\\Users\\Offic\\Downloads\\{folder}``
-    where ``{folder}`` is replaced by the folder name when the user saves. This
-    way the saved ``claude_prompt.txt`` points Claude at the real files on disk.
+    Photo + JSON paths are written under
+    ``C:\\Users\\Offic\\Downloads\\<folder_name>`` so the prompt points Claude at
+    the real files on disk once they are saved there.
     """
-    base = SAVE_BASE
+    folder = (folder_name or "out").strip().strip("/\\") or "out"
+    base = f"{SAVE_ROOT}\\{folder}"
     shimmed = []
     for bug in bugs:
         b = dict(bug)

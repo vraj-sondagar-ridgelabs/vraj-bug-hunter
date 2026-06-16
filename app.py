@@ -78,12 +78,21 @@ with st.container(border=True):
         help="Each bug should be a photo followed by its description text.",
     )
 
-    project_path = st.text_input(
-        "Project path (optional)",
-        value="",
-        placeholder="C:/leadforge",
-        help="The codebase the bugs live in. Stored in each bug's project_path.",
-    )
+    col1, col2 = st.columns(2)
+    with col1:
+        project_path = st.text_input(
+            "Project path (optional)",
+            value="",
+            placeholder="C:/leadforge",
+            help="The codebase the bugs live in. Stored in each bug's project_path.",
+        )
+    with col2:
+        folder_name = st.text_input(
+            "Output folder name",
+            value="out",
+            help="Folder name under C:/Users/Offic/Downloads used in the Claude "
+            "prompt paths. Save into a folder with this name to match.",
+        )
 
     make_prompt = st.checkbox("Also generate a Claude-ready prompt", value=True)
 
@@ -107,6 +116,7 @@ if run and uploaded is not None:
                 tmp_path,
                 project_path=project_path.strip(),
                 make_prompt=make_prompt,
+                folder_name=folder_name.strip() or "out",
             )
 
         tmp_path.unlink(missing_ok=True)
@@ -180,9 +190,10 @@ if bugs is not None and files is not None:
             with st.expander("Preview / copy Claude prompt"):
                 st.markdown(
                     '<p class="muted">Paths point at '
-                    "<code>C:\\Users\\Offic\\Downloads\\{folder}</code>. When you "
-                    '"Save to a folder", <code>{folder}</code> is replaced with the '
-                    "folder name you pick. Copy with the icon at the box's top-right.</p>",
+                    "<code>C:\\Users\\Offic\\Downloads\\"
+                    + (folder_name.strip() or "out")
+                    + "</code> — save into a folder with that name so the paths "
+                    "resolve. Copy with the icon at the box's top-right.</p>",
                     unsafe_allow_html=True,
                 )
                 st.code(
