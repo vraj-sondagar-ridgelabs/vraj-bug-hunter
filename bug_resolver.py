@@ -173,12 +173,14 @@ def extract_bugs_in_memory(
         tmp_dir = Path(tmp)
         bugs = extract_bugs(docx_path, tmp_dir, project_path=project_path)
 
+        base = f"{SAVE_ROOT}\\{{folder}}"
         files: dict[str, bytes] = {}
         for bug in bugs:
             rel = bug["photo_path"]  # e.g. "images/bug_1.png"
             files[rel] = (tmp_dir / rel).read_bytes()
-            # Drop the absolute path; it would point at the (now-deleted) temp dir.
-            bug.pop("photo_abs_path", None)
+            # Real on-disk path, with the {folder} token the save step resolves —
+            # mirrors what the prompt shows, so bugs.json carries the same path.
+            bug["photo_abs_path"] = f"{base}\\{rel.replace('/', chr(92))}"
 
         files["bugs.json"] = json.dumps(
             bugs, indent=2, ensure_ascii=False
@@ -297,6 +299,12 @@ def build_claude_prompt(bugs: list[dict], json_path: Path) -> str:
         "FIRST: create a todo list with one item per bug below, then work through "
         "them ONE BY ONE — fully fix and verify each bug before starting the next, "
         "marking each todo complete as you go. Do not batch or skip ahead.",
+        "",
+        "STRICT RULE — ANALYZE THE IMAGE FIRST: for every bug you MUST open the "
+        "photo with the Read tool and study it BEFORE reading code, searching the "
+        "project, or proposing any fix. Never act on the text description alone. "
+        "If you have not viewed the image yet, you are not allowed to start "
+        "fixing. The screenshot is the ground truth.",
         "",
         "For each bug below: open the photo with the Read tool and analyze the "
         "image VERY deeply — inspect every detail (UI elements, layout, "

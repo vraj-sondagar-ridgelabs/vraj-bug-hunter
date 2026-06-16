@@ -81,9 +81,10 @@ btn.addEventListener('click', async () => {
       const fileHandle = await handle.getFileHandle(parts[parts.length - 1], { create: true });
       const writable = await fileHandle.createWritable();
       let bytes = b64ToBytes(f.b64);
-      // The prompt embeds a "{folder}" placeholder for the save location — swap
-      // in the real picked folder name so the saved prompt points at real files.
-      if (f.path === 'claude_prompt.txt') {
+      // bugs.json and claude_prompt.txt embed a "{folder}" placeholder for the
+      // save location — swap in the real picked folder name so their paths point
+      // at the actual files on disk.
+      if (f.path === 'claude_prompt.txt' || f.path === 'bugs.json') {
         let text = new TextDecoder().decode(bytes);
         text = text.split('{folder}').join(dir.name);
         bytes = new TextEncoder().encode(text);

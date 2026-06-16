@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import html
 import io
+import json
 import tempfile
 import zipfile
 from pathlib import Path
@@ -129,12 +130,14 @@ if run and uploaded is not None:
 
         # Files for the folder-save widget keep the {folder} token (the widget
         # swaps the real picked folder name). For the ZIP/preview there is no
-        # picker, so resolve the token to the typed folder name.
+        # picker, so resolve the token to the typed folder name. Both bugs.json
+        # and claude_prompt.txt embed the token.
         zip_files = dict(files)
-        if "claude_prompt.txt" in zip_files:
-            zip_files["claude_prompt.txt"] = resolve_prompt_folder(
-                zip_files["claude_prompt.txt"].decode("utf-8"), folder
-            ).encode("utf-8")
+        for name in ("claude_prompt.txt", "bugs.json"):
+            if name in zip_files:
+                zip_files[name] = resolve_prompt_folder(
+                    zip_files[name].decode("utf-8"), folder
+                ).encode("utf-8")
 
         st.session_state["bugs"] = bugs
         st.session_state["files"] = files
@@ -142,6 +145,10 @@ if run and uploaded is not None:
         st.session_state["zip_bytes"] = _make_zip(zip_files)
         st.session_state["prompt_resolved"] = zip_files.get(
             "claude_prompt.txt", b""
+        )
+        # Resolved bugs for the preview (token swapped for the typed folder).
+        st.session_state["bugs_resolved"] = json.loads(
+            zip_files["bugs.json"].decode("utf-8")
         )
         st.session_state["source_name"] = uploaded.name
     except Exception as exc:  # noqa: BLE001 - surface a clean message to the user
@@ -207,7 +214,7 @@ if bugs is not None and files is not None:
             )
 
         with st.expander("Preview bugs.json"):
-            st.json(bugs)
+            st.json(st.session_state.get("bugs_resolved", bugs))
 
         if has_prompt:
             with st.expander("Preview / copy Claude prompt"):
@@ -262,6 +269,7 @@ if bugs is not None and files is not None:
                 "folder",
                 "zip_bytes",
                 "prompt_resolved",
+                "bugs_resolved",
                 "source_name",
             ):
                 st.session_state.pop(k, None)
