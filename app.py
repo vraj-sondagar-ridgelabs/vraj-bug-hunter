@@ -11,6 +11,7 @@ Run:
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -40,6 +41,16 @@ st.markdown(
         line-height: 1.55;
       }
       .muted { color: rgba(127,127,127,0.9); font-size: 0.85rem; }
+      /* Danger emphasis for the delete button (keyed st.button) */
+      .st-key-delete_output button:not(:disabled) {
+        border-color: #d64545;
+        color: #d64545;
+      }
+      .st-key-delete_output button:not(:disabled):hover {
+        background: #d64545;
+        border-color: #d64545;
+        color: #ffffff;
+      }
     </style>
     """,
     unsafe_allow_html=True,
@@ -116,6 +127,7 @@ if run and uploaded is not None:
 
         st.session_state["bugs"] = bugs
         st.session_state["json_path"] = str(json_path.resolve())
+        st.session_state["out_dir"] = str(out_dir.resolve())
         st.session_state["prompt_text"] = prompt_text
         st.session_state["source_name"] = uploaded.name
     except Exception as exc:  # noqa: BLE001 - surface a clean message to the user
@@ -197,3 +209,47 @@ if bugs is not None:
                             f'<p class="muted">Project: {bug["project_path"]}</p>',
                             unsafe_allow_html=True,
                         )
+
+    # --- Danger zone: clean up the output folder once done -------------------
+    out_dir = st.session_state.get("out_dir")
+    if out_dir:
+        st.divider()
+        with st.container(border=True):
+            st.markdown("**Clean up**")
+            st.markdown(
+                f'<p class="muted">Done with these results? Delete the output '
+                f"folder (images + bugs.json + prompt) at "
+                f"<code>{out_dir}</code>. Download anything you need first — "
+                f"this cannot be undone.</p>",
+                unsafe_allow_html=True,
+            )
+            confirm = st.checkbox(
+                "Yes, I've saved what I need — permanently delete this folder.",
+                key="confirm_delete",
+            )
+            if st.button(
+                "Delete output folder",
+                type="secondary",
+                disabled=not confirm,
+                key="delete_output",
+            ):
+                try:
+                    target = Path(out_dir)
+                    if target.is_dir():
+                        shutil.rmtree(target)
+                        # Clear results so the page resets to the upload state.
+                        for k in (
+                            "bugs",
+                            "json_path",
+                            "out_dir",
+                            "prompt_text",
+                            "source_name",
+                            "confirm_delete",
+                        ):
+                            st.session_state.pop(k, None)
+                        st.success(f"Deleted {out_dir}")
+                        st.rerun()
+                    else:
+                        st.info("Folder no longer exists — nothing to delete.")
+                except Exception as exc:  # noqa: BLE001
+                    st.error(f"Could not delete the folder: {exc}")
