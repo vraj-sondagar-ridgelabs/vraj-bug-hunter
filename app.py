@@ -16,6 +16,7 @@ Run:
 
 from __future__ import annotations
 
+import html
 import io
 import tempfile
 import zipfile
@@ -23,7 +24,11 @@ from pathlib import Path
 
 import streamlit as st
 
-from bug_resolver import extract_bugs_in_memory
+from bug_resolver import (
+    extract_bugs_in_memory,
+    resolve_prompt_folder,
+    sanitize_folder_name,
+)
 from fs_saver import folder_save_widget
 
 st.set_page_config(
@@ -116,16 +121,32 @@ if run and uploaded is not None:
                 tmp_path,
                 project_path=project_path.strip(),
                 make_prompt=make_prompt,
-                folder_name=folder_name.strip() or "out",
             )
 
         tmp_path.unlink(missing_ok=True)
 
+        folder = sanitize_folder_name(folder_name)
+
+        # Files for the folder-save widget keep the {folder} token (the widget
+        # swaps the real picked folder name). For the ZIP/preview there is no
+        # picker, so resolve the token to the typed folder name.
+        zip_files = dict(files)
+        if "claude_prompt.txt" in zip_files:
+            zip_files["claude_prompt.txt"] = resolve_prompt_folder(
+                zip_files["claude_prompt.txt"].decode("utf-8"), folder
+            ).encode("utf-8")
+
         st.session_state["bugs"] = bugs
         st.session_state["files"] = files
+        st.session_state["folder"] = folder
+        st.session_state["zip_bytes"] = _make_zip(zip_files)
+        st.session_state["prompt_resolved"] = zip_files.get(
+            "claude_prompt.txt", b""
+        )
         st.session_state["source_name"] = uploaded.name
     except Exception as exc:  # noqa: BLE001 - surface a clean message to the user
         st.error(f"Failed to process the document: {exc}")
+        st.exception(exc)
 
 # --- Results -----------------------------------------------------------------
 bugs = st.session_state.get("bugs")
@@ -149,10 +170,13 @@ if bugs is not None and files is not None:
         st.subheader("Output")
         src = st.session_state.get("source_name", "bug report")
         zip_name = Path(src).stem + "_bugs.zip"
+        folder = st.session_state.get("folder", "out")
+        has_prompt = "claude_prompt.txt" in files
+        prompt_resolved = st.session_state.get("prompt_resolved", b"")
 
         st.markdown(
             '<p class="muted">Save everything (images + bugs.json'
-            + (" + claude_prompt.txt" if make_prompt else "")
+            + (" + claude_prompt.txt" if has_prompt else "")
             + ") to a folder you pick, or download it as a ZIP.</p>",
             unsafe_allow_html=True,
         )
@@ -160,12 +184,11 @@ if bugs is not None and files is not None:
         st.markdown("**Save to a folder** (Chrome / Edge)")
         folder_save_widget(files)
 
-        has_prompt = make_prompt and "claude_prompt.txt" in files
         dl1, dl2 = st.columns(2)
         with dl1:
             st.download_button(
                 "Download ZIP",
-                data=_make_zip(files),
+                data=st.session_state.get("zip_bytes", b""),
                 file_name=zip_name,
                 mime="application/zip",
                 width="stretch",
@@ -173,7 +196,7 @@ if bugs is not None and files is not None:
         with dl2:
             st.download_button(
                 "Download Claude prompt",
-                data=files.get("claude_prompt.txt", b""),
+                data=prompt_resolved,
                 file_name="claude_prompt.txt",
                 mime="text/plain",
                 width="stretch",
@@ -190,14 +213,13 @@ if bugs is not None and files is not None:
             with st.expander("Preview / copy Claude prompt"):
                 st.markdown(
                     '<p class="muted">Paths point at '
-                    "<code>C:\\Users\\Offic\\Downloads\\"
-                    + (folder_name.strip() or "out")
-                    + "</code> — save into a folder with that name so the paths "
+                    + html.escape(f"C:\\Users\\Offic\\Downloads\\{folder}")
+                    + " — save into a folder with that name so the paths "
                     "resolve. Copy with the icon at the box's top-right.</p>",
                     unsafe_allow_html=True,
                 )
                 st.code(
-                    files["claude_prompt.txt"].decode("utf-8"),
+                    prompt_resolved.decode("utf-8"),
                     language="markdown",
                 )
 
@@ -215,20 +237,32 @@ if bugs is not None and files is not None:
                         st.warning("Image missing")
                 with txt_col:
                     st.markdown(f"**Bug {bug['id']}**")
-                    desc = bug["description"] or "_No description text found._"
-                    st.markdown(
-                        f'<div class="bug-desc">{desc}</div>',
-                        unsafe_allow_html=True,
-                    )
+                    if bug["description"]:
+                        # Untrusted text from the .docx — escape before HTML.
+                        st.markdown(
+                            f'<div class="bug-desc">{html.escape(bug["description"])}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown("_No description text found._")
                     if bug.get("project_path"):
                         st.markdown(
-                            f'<p class="muted">Project: {bug["project_path"]}</p>',
+                            '<p class="muted">Project: '
+                            + html.escape(str(bug["project_path"]))
+                            + "</p>",
                             unsafe_allow_html=True,
                         )
 
         # --- Clear results ------------------------------------------------
         st.divider()
         if st.button("Clear results", type="secondary"):
-            for k in ("bugs", "files", "source_name"):
+            for k in (
+                "bugs",
+                "files",
+                "folder",
+                "zip_bytes",
+                "prompt_resolved",
+                "source_name",
+            ):
                 st.session_state.pop(k, None)
             st.rerun()

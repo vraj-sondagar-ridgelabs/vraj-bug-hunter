@@ -2,15 +2,19 @@
 """Bug Resolver.
 
 Read a Word (.docx) bug report, extract each bug's embedded photo and the
-description text that follows it, save the photos to a local folder, and write a
-JSON file pairing every photo's path with its description.
+description text that follows it, and pair every photo with its description as
+JSON. Two entry points:
+
+  * CLI (``main``) — writes images + bugs.json to a folder on disk.
+  * In-memory (``extract_bugs_in_memory``) — returns the files as bytes, used by
+    the Streamlit UI so nothing depends on a server-side path (cloud-safe).
 
 Document layout assumed: each bug is an image followed by its description text
 (in reading order). Images and the paragraphs after them are paired
 sequentially.
 
 Usage:
-    python bug_resolver.py <input.docx> [--out <output_dir>]
+    python bug_resolver.py <input.docx> [--out <dir>] [--project <path>] [--prompt]
 """
 
 from __future__ import annotations
@@ -18,12 +22,13 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import re
 import sys
+import tempfile
 from pathlib import Path
 
 try:
     from docx import Document
-    from docx.opc.constants import RELATIONSHIP_TYPE as RT
     from docx.oxml.ns import qn
 except ImportError:
     sys.exit(
@@ -32,11 +37,13 @@ except ImportError:
 
 
 # Namespace-qualified tags used while walking the document body XML.
-_DRAWING = qn("w:drawing")
 _BLIP = qn("a:blip")
 _EMBED = qn("r:embed")
 _PARA = qn("w:p")
 _TEXT = qn("w:t")
+
+# Base directory the user saves output into. The folder name is appended.
+SAVE_ROOT = r"C:\Users\Offic\Downloads"
 
 
 def _iter_block_items(document):
@@ -143,8 +150,7 @@ def extract_bugs_in_memory(
     docx_path: Path,
     project_path: str = "",
     make_prompt: bool = True,
-    folder_name: str = "out",
-):
+) -> tuple[list[dict], dict[str, bytes]]:
     """Extract bugs without persisting to a chosen folder (cloud-safe).
 
     Returns ``(bugs, files)`` where:
@@ -157,9 +163,12 @@ def extract_bugs_in_memory(
 
     Internally it extracts to a temp dir (python-docx needs real paths), then
     reads the images back into memory and discards the temp dir.
-    """
-    import tempfile
 
+    The stored ``claude_prompt.txt`` keeps the ``{folder}`` token: the
+    folder-save component substitutes the real folder the user picks at save
+    time. For the ZIP/preview path (no picker), the caller resolves the token
+    with :func:`resolve_prompt_folder`.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
         bugs = extract_bugs(docx_path, tmp_dir, project_path=project_path)
@@ -176,25 +185,26 @@ def extract_bugs_in_memory(
         ).encode("utf-8")
 
         if make_prompt:
-            prompt = build_claude_prompt_relative(bugs, folder_name=folder_name)
-            files["claude_prompt.txt"] = prompt.encode("utf-8")
+            # Keep the {folder} token so the folder-save component can swap in the
+            # real picked folder. The ZIP/preview path resolves it via folder_name.
+            files["claude_prompt.txt"] = build_claude_prompt_relative(bugs).encode(
+                "utf-8"
+            )
 
     return bugs, files
 
 
-# Base directory the user saves output into. The folder name is appended.
-SAVE_ROOT = r"C:\Users\Offic\Downloads"
-
-
-def build_claude_prompt_relative(bugs: list[dict], folder_name: str = "out") -> str:
+def build_claude_prompt_relative(bugs: list[dict]) -> str:
     """Claude brief for the in-memory/cloud flow.
 
-    Photo + JSON paths are written under
-    ``C:\\Users\\Offic\\Downloads\\<folder_name>`` so the prompt points Claude at
-    the real files on disk once they are saved there.
+    Photo + JSON paths point at ``C:\\Users\\Offic\\Downloads\\<folder>``. The
+    literal token ``{folder}`` is used as the folder segment so the
+    folder-save component can substitute the *actual* folder the user picks
+    (the real single source of truth). For the ZIP / preview — where no folder
+    is picked — the caller substitutes ``folder_name`` via
+    :func:`resolve_prompt_folder`.
     """
-    folder = (folder_name or "out").strip().strip("/\\") or "out"
-    base = f"{SAVE_ROOT}\\{folder}"
+    base = f"{SAVE_ROOT}\\{{folder}}"
     shimmed = []
     for bug in bugs:
         b = dict(bug)
@@ -202,6 +212,21 @@ def build_claude_prompt_relative(bugs: list[dict], folder_name: str = "out") -> 
         b["photo_abs_path"] = f"{base}\\{rel}"
         shimmed.append(b)
     return build_claude_prompt(shimmed, Path(f"{base}\\bugs.json"))
+
+
+def resolve_prompt_folder(prompt: str, folder_name: str) -> str:
+    """Replace the ``{folder}`` token in a prompt with a concrete folder name."""
+    folder = sanitize_folder_name(folder_name)
+    return prompt.replace("{folder}", folder)
+
+
+def sanitize_folder_name(folder_name: str) -> str:
+    """Reduce a user-supplied folder name to a safe single path segment."""
+    cleaned = (folder_name or "").strip().strip("/\\")
+    # Keep only safe characters; collapse anything else away (blocks traversal).
+    cleaned = re.sub(r"[^A-Za-z0-9._-]", "", cleaned)
+    cleaned = cleaned.strip(".")  # avoid "", ".", ".." results
+    return cleaned or "out"
 
 
 def main(argv: list[str] | None = None) -> int:
