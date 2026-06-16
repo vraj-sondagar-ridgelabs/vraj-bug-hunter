@@ -80,7 +80,15 @@ btn.addEventListener('click', async () => {
       }
       const fileHandle = await handle.getFileHandle(parts[parts.length - 1], { create: true });
       const writable = await fileHandle.createWritable();
-      await writable.write(b64ToBytes(f.b64));
+      let bytes = b64ToBytes(f.b64);
+      // The prompt embeds a "{folder}" placeholder for the save location — swap
+      // in the real picked folder name so the saved prompt points at real files.
+      if (f.path === 'claude_prompt.txt') {
+        let text = new TextDecoder().decode(bytes);
+        text = text.split('{folder}').join(dir.name);
+        bytes = new TextEncoder().encode(text);
+      }
+      await writable.write(bytes);
       await writable.close();
       saved.push(dir.name + '/' + f.path);
     }

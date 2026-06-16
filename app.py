@@ -179,9 +179,10 @@ if bugs is not None and files is not None:
         if has_prompt:
             with st.expander("Preview / copy Claude prompt"):
                 st.markdown(
-                    '<p class="muted">When saved to a folder, this is written as '
-                    "<code>&lt;folder&gt;/claude_prompt.txt</code>. Use the copy "
-                    "icon at the top-right of the box below.</p>",
+                    '<p class="muted">Paths point at '
+                    "<code>C:\\Users\\Offic\\Downloads\\{folder}</code>. When you "
+                    '"Save to a folder", <code>{folder}</code> is replaced with the '
+                    "folder name you pick. Copy with the icon at the box's top-right.</p>",
                     unsafe_allow_html=True,
                 )
                 st.code(

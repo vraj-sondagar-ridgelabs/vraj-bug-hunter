@@ -179,16 +179,26 @@ def extract_bugs_in_memory(
     return bugs, files
 
 
+# Where the user saves the output. The literal "{folder}" is a placeholder the
+# folder-save component replaces with the actual folder name picked at save time.
+SAVE_BASE = r"C:\Users\Offic\Downloads\{folder}"
+
+
 def build_claude_prompt_relative(bugs: list[dict]) -> str:
-    """Claude brief using relative photo paths (for the in-memory/cloud flow)."""
-    # Reuse build_claude_prompt by temporarily mapping photo_path -> abs field it
-    # expects. We pass relative paths so the prompt resolves after unzip.
+    """Claude brief for the in-memory/cloud flow.
+
+    Photo + JSON paths are written under ``C:\\Users\\Offic\\Downloads\\{folder}``
+    where ``{folder}`` is replaced by the folder name when the user saves. This
+    way the saved ``claude_prompt.txt`` points Claude at the real files on disk.
+    """
+    base = SAVE_BASE
     shimmed = []
     for bug in bugs:
         b = dict(bug)
-        b.setdefault("photo_abs_path", bug.get("photo_path", ""))
+        rel = bug.get("photo_path", "").replace("/", "\\")
+        b["photo_abs_path"] = f"{base}\\{rel}"
         shimmed.append(b)
-    return build_claude_prompt(shimmed, Path("bugs.json"))
+    return build_claude_prompt(shimmed, Path(f"{base}\\bugs.json"))
 
 
 def main(argv: list[str] | None = None) -> int:
