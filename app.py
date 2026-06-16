@@ -150,19 +150,40 @@ if bugs is not None and files is not None:
         st.markdown("**Save to a folder** (Chrome / Edge)")
         folder_save_widget(files)
 
-        st.download_button(
-            "Download ZIP",
-            data=_make_zip(files),
-            file_name=zip_name,
-            mime="application/zip",
-            width="stretch",
-        )
+        has_prompt = make_prompt and "claude_prompt.txt" in files
+        dl1, dl2 = st.columns(2)
+        with dl1:
+            st.download_button(
+                "Download ZIP",
+                data=_make_zip(files),
+                file_name=zip_name,
+                mime="application/zip",
+                width="stretch",
+            )
+        with dl2:
+            st.download_button(
+                "Download Claude prompt",
+                data=files.get("claude_prompt.txt", b""),
+                file_name="claude_prompt.txt",
+                mime="text/plain",
+                width="stretch",
+                disabled=not has_prompt,
+                help="Saved to your picked folder too, as claude_prompt.txt"
+                if has_prompt
+                else "Enable 'Also generate a Claude-ready prompt' to use this.",
+            )
 
         with st.expander("Preview bugs.json"):
             st.json(bugs)
 
-        if make_prompt and "claude_prompt.txt" in files:
-            with st.expander("Preview Claude prompt"):
+        if has_prompt:
+            with st.expander("Preview / copy Claude prompt"):
+                st.markdown(
+                    '<p class="muted">When saved to a folder, this is written as '
+                    "<code>&lt;folder&gt;/claude_prompt.txt</code>. Use the copy "
+                    "icon at the top-right of the box below.</p>",
+                    unsafe_allow_html=True,
+                )
                 st.code(
                     files["claude_prompt.txt"].decode("utf-8"),
                     language="markdown",

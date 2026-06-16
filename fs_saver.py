@@ -17,12 +17,16 @@ import json
 import streamlit.components.v1 as components
 
 
-def folder_save_widget(files: dict[str, bytes], height: int = 140) -> None:
+def folder_save_widget(files: dict[str, bytes], height: int | None = None) -> None:
     """Render a "Pick folder & save" button that writes `files` to a chosen dir.
 
     `files` maps a relative path (e.g. "images/bug_1.png" or "bugs.json") to its
     raw bytes. Subfolders in the path are created inside the picked directory.
+    On success it lists every saved file path under the chosen folder.
     """
+    if height is None:
+        # Reserve room for the button + one status line per saved file.
+        height = 90 + min(len(files), 12) * 18
     payload = [
         {"path": path, "b64": base64.b64encode(data).decode("ascii")}
         for path, data in files.items()
@@ -66,7 +70,7 @@ btn.addEventListener('click', async () => {
     status.textContent = 'Opening folder picker…';
     const dir = await window.showDirectoryPicker({ mode: 'readwrite' });
 
-    let count = 0;
+    const saved = [];
     for (const f of FILES) {
       const parts = f.path.split('/');
       let handle = dir;
@@ -78,10 +82,15 @@ btn.addEventListener('click', async () => {
       const writable = await fileHandle.createWritable();
       await writable.write(b64ToBytes(f.b64));
       await writable.close();
-      count++;
+      saved.push(dir.name + '/' + f.path);
     }
     status.style.color = '#2e7d32';
-    status.textContent = 'Saved ' + count + ' file(s) to "' + dir.name + '".';
+    // Browsers do not expose the full absolute path — only the chosen folder name.
+    status.innerHTML =
+      'Saved ' + saved.length + ' file(s) to folder <b>"' + dir.name + '"</b>:' +
+      '<br><span style="color:#9aa0a6; font-size:0.8rem;">' +
+      saved.map(p => '&bull; ' + p).join('<br>') +
+      '</span>';
   } catch (err) {
     if (err && err.name === 'AbortError') {
       status.textContent = 'Cancelled — no folder selected.';
