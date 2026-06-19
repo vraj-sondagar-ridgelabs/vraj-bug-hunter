@@ -300,6 +300,17 @@ def build_claude_prompt(bugs: list[dict], json_path: Path) -> str:
         "them ONE BY ONE — fully fix and verify each bug before starting the next, "
         "marking each todo complete as you go. Do not batch or skip ahead.",
         "",
+        "TRIAGE EACH ITEM BEFORE TOUCHING ANYTHING:",
+        "  1. Verify the bug is genuine FIRST — reproduce or trace it in the actual "
+        "code before doing anything. Only if confirmed genuine do you fix it.",
+        "  2. If it IS a genuine bug → fix it, then verify the fix with Playwright "
+        "(1 bug = 1 verification; verify each bug's fix individually with "
+        "Playwright before moving to the next).",
+        "  3. If it is an ENHANCEMENT rather than a bug → implement the "
+        "enhancement (do it, don't skip it).",
+        "  4. If it is NOT a genuine bug (already works / expected behavior / not "
+        "reproducible) → change nothing; note why and skip it.",
+        "",
         "STRICT RULE — ANALYZE THE IMAGE FIRST: for every bug you MUST open the "
         "photo with the Read tool and study it BEFORE reading code, searching the "
         "project, or proposing any fix. Never act on the text description alone. "
@@ -329,15 +340,24 @@ def build_claude_prompt(bugs: list[dict], json_path: Path) -> str:
 
     lines.append("---")
     lines.append("")
-    lines.append("## Final verification (required)")
+    lines.append("## Verification (required, per bug)")
     lines.append(
-        "After fixing all bugs, verify EVERY bug one by one using the Playwright "
-        "CLI / playwright-cli skill. For each bug: launch the app in the browser, "
-        "navigate to the affected screen, reproduce the original scenario, and "
-        "confirm the fix is actually implemented and the issue is gone (take a "
-        "screenshot as proof). Go through the bugs sequentially (Bug 1, Bug 2, …) "
-        "and report a clear PASS/FAIL for each — do not mark a bug done until "
-        "Playwright confirms it visually."
+        "For each GENUINE bug or enhancement you acted on, verify the change with "
+        "the Playwright CLI / playwright-cli skill — 1 bug = 1 verification. "
+        "Launch the app in the browser, navigate to the affected screen, reproduce "
+        "the original scenario, and confirm the fix/enhancement is actually "
+        "implemented and the issue is gone (take a screenshot as proof). Verify "
+        "each bug individually BEFORE moving to the next, and report a clear "
+        "PASS/FAIL — do not mark a bug done until Playwright confirms it visually. "
+        "Items judged not-a-bug need no Playwright run."
+    )
+    lines.append("")
+    lines.append("## Final report (required)")
+    lines.append(
+        "At the end, output a table covering EVERY item with these columns: "
+        "Bug | Genuine? | Bug vs Enhancement | Action taken | Playwright "
+        "verification result. Skipped (not-a-bug) items must appear too, with the "
+        "reason in 'Action taken' and 'N/A' for verification."
     )
     lines.append("")
     return "\n".join(lines)
