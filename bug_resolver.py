@@ -317,6 +317,12 @@ def build_claude_prompt(bugs: list[dict], json_path: Path) -> str:
         "If you have not viewed the image yet, you are not allowed to start "
         "fixing. The screenshot is the ground truth.",
         "",
+        "STRICT RULE — ONE BUG, ONE VERIFICATION: the moment a bug is solved, "
+        "verify that single bug with Playwright before moving on. 1 bug = 1 "
+        "Playwright verification — verify each bug's fix individually; never batch "
+        "verifications or fix several bugs and verify them together. Finish "
+        "fix → Playwright verify → only then start the next bug.",
+        "",
         "For each bug below: open the photo with the Read tool and analyze the "
         "image VERY deeply — inspect every detail (UI elements, layout, "
         "spacing, colors, text, error states, cursor, highlighted/circled areas, "
